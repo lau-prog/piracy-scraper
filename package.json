@@ -1,0 +1,14 @@
+{
+  "name": "icc-scraper",
+  "version": "1.0.0",
+  "main": "scraper.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node scraper.js"
+  },
+  "dependencies": {
+    "puppeteer": "^24.32.1",
+    "express": "^4.21.2",
+    "cors": "^2.8.5"
+  }
+}
