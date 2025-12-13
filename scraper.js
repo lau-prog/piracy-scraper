@@ -2,7 +2,6 @@ const puppeteer = require('puppeteer');
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// ICC Piracy scraper (existing - unchanged)
 async function scrapeIccPiracy() {
   console.log('Starting browser...');
   
@@ -23,6 +22,7 @@ async function scrapeIccPiracy() {
   console.log('Waiting for map to load...');
   await delay(5000);
   
+  // Scroll down to trigger table loading
   console.log('Scrolling to load table...');
   await page.evaluate(() => {
     window.scrollTo(0, document.body.scrollHeight);
@@ -32,6 +32,7 @@ async function scrapeIccPiracy() {
   
   console.log('Extracting piracy incidents...');
   const incidents = await page.evaluate(() => {
+    // Find the incidents table - look for table with 3 columns
     const tables = Array.from(document.querySelectorAll('table'));
     let incidentsTable = null;
     
@@ -39,6 +40,7 @@ async function scrapeIccPiracy() {
       const headers = Array.from(table.querySelectorAll('thead th, th'));
       const headerText = headers.map(h => h.textContent.trim().toLowerCase()).join(' ');
       
+      // Find table with our 3 columns
       if (headerText.includes('incident number') && 
           headerText.includes('date') && 
           headerText.includes('narrations')) {
@@ -58,6 +60,7 @@ async function scrapeIccPiracy() {
     const results = rows.map(row => {
       const cells = Array.from(row.querySelectorAll('td'));
       
+      // Must have exactly 3 cells
       if (cells.length !== 3) return null;
       
       const incident = {
@@ -66,6 +69,7 @@ async function scrapeIccPiracy() {
         narrations: cells[2]?.textContent?.trim()
       };
       
+      // Filter out empty or invalid rows
       if (!incident.incident_number || !incident.date) return null;
       
       return incident;
@@ -80,117 +84,10 @@ async function scrapeIccPiracy() {
   return incidents;
 }
 
-// NEW: GAC Hot Port News scraper
-async function scrapeGacHotPorts() {
-  console.log('Starting browser for GAC...');
-  
-  const browser = await puppeteer.launch({ 
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1920, height: 1080 });
-  
-  const allNews = [];
-  
-  // Scrape both pages
-  const pages = [
-    'https://www.gac.com/hot-port-news',
-    'https://www.gac.com/hot-port-news/p2'
-  ];
-  
-  for (const pageUrl of pages) {
-    console.log(`Going to ${pageUrl}...`);
-    await page.goto(pageUrl, { 
-      waitUntil: 'networkidle2',
-      timeout: 60000
-    });
-    
-    console.log('Waiting for content to load...');
-    await delay(3000);
-    
-    console.log('Extracting hot port news...');
-    const newsItems = await page.evaluate(() => {
-      const items = [];
-      
-      // Find all card-main links
-      const cards = Array.from(document.querySelectorAll('a.card-main'));
-      
-      cards.forEach(card => {
-        try {
-          // Extract link
-          const link = card.href;
-          
-          // Skip if not a hot-port-news link
-          if (!link.includes('/hot-port-news/')) return;
-          
-          // Find date and location (in content__date div)
-          const dateElements = card.querySelectorAll('.content__date p');
-          let date = '';
-          let location = '';
-          
-          if (dateElements.length >= 2) {
-            date = dateElements[0]?.textContent?.trim() || '';
-            location = dateElements[1]?.textContent?.trim() || '';
-          }
-          
-          // Find title (h6)
-          const titleElement = card.querySelector('h6');
-          const title = titleElement?.textContent?.trim() || '';
-          
-          // Get summary text (all text after h6)
-          const contentDiv = card.querySelector('.card-main__content, .card-maincontent');
-          let summary = '';
-          
-          if (contentDiv) {
-            // Get all text, remove date/location/title
-            const fullText = contentDiv.textContent.trim();
-            const textParts = fullText.split(title);
-            if (textParts.length > 1) {
-              summary = textParts[1].trim().replace(/Read More$/, '').trim();
-            }
-          }
-          
-          if (title && date) {
-            items.push({
-              date,
-              location,
-              title,
-              link,
-              summary: summary.substring(0, 300)
-            });
-          }
-        } catch (e) {
-          console.error('Error parsing card:', e.message);
-        }
-      });
-      
-      return items;
-    });
-    
-    console.log(`Found ${newsItems.length} news items on this page`);
-    allNews.push(...newsItems);
-  }
-  
-  await browser.close();
-  console.log(`Total GAC hot port news: ${allNews.length}`);
-  
-  return allNews;
-}
+module.exports = scrapeIccPiracy;
 
-module.exports = { scrapeIccPiracy, scrapeGacHotPorts };
-
-// CLI testing
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  if (args[0] === 'gac') {
-    scrapeGacHotPorts()
-      .then(data => console.log(JSON.stringify(data, null, 2)))
-      .catch(console.error);
-  } else {
-    scrapeIccPiracy()
-      .then(data => console.log(JSON.stringify(data, null, 2)))
-      .catch(console.error);
-  }
+  scrapeIccPiracy()
+    .then(data => console.log(JSON.stringify(data, null, 2)))
+    .catch(console.error);
 }
